@@ -1,0 +1,21 @@
+  ____________       _____________
+ ____    |__( )_________  __/__  /________      __
+____  /| |_  /__  ___/_  /_ __  /_  __ \_ | /| / /
+___  ___ |  / _  /   _  __/ _  / / /_/ /_ |/ |/ /
+ _/_/  |_/_/  /_/    /_/    /_/  \____/____/|__/
+[[34m2021-12-26 15:51:50,557[0m] {[34mscheduler_job.py:[0m1247} INFO[0m - Starting the scheduler[0m
+[[34m2021-12-26 15:51:50,557[0m] {[34mscheduler_job.py:[0m1252} INFO[0m - Processing each file at most -1 times[0m
+[[34m2021-12-26 15:51:50,562[0m] {[34mdag_processing.py:[0m250} INFO[0m - Launched DagFileProcessorManager with pid: 1583[0m
+[[34m2021-12-26 15:51:50,565[0m] {[34mscheduler_job.py:[0m1834} INFO[0m - Resetting orphaned tasks for active dag runs[0m
+[[34m2021-12-26 15:51:50,571[0m] {[34msettings.py:[0m54} INFO[0m - Configured default timezone Timezone('UTC')[0m
+[[34m2021-12-26 15:51:50,587[0m] {[34mscheduler_job.py:[0m1856} INFO[0m - Marked 1 SchedulerJob instances as failed[0m
+[2021-12-26 15:51:50,591] {dag_processing.py:515} WARNING - Because we cannot use more than 1 thread (parsing_processes = 2 ) when using sqlite. So we set parallelism to 1.
+[[34m2021-12-26 15:56:50,772[0m] {[34mscheduler_job.py:[0m1834} INFO[0m - Resetting orphaned tasks for active dag runs[0m
+[[34m2021-12-26 16:01:50,821[0m] {[34mscheduler_job.py:[0m1834} INFO[0m - Resetting orphaned tasks for active dag runs[0m
+[[34m2021-12-26 16:06:50,992[0m] {[34mscheduler_job.py:[0m1834} INFO[0m - Resetting orphaned tasks for active dag runs[0m
+[[34m2021-12-26 16:11:51,044[0m] {[34mscheduler_job.py:[0m1834} INFO[0m - Resetting orphaned tasks for active dag runs[0m
+[[34m2021-12-26 16:16:51,197[0m] {[34mscheduler_job.py:[0m1834} INFO[0m - Resetting orphaned tasks for active dag runs[0m
+[[34m2021-12-26 16:21:51,244[0m] {[34mscheduler_job.py:[0m1834} INFO[0m - Resetting orphaned tasks for active dag runs[0m
+[[34m2021-12-26 16:26:51,297[0m] {[34mscheduler_job.py:[0m1834} INFO[0m - Resetting orphaned tasks for active dag runs[0m
+[[34m2021-12-26 16:31:51,347[0m] {[34mscheduler_job.py:[0m1834} INFO[0m - Resetting orphaned tasks for active dag runs[0m
+[[34m2021-12-26 16:36:51,398[0m] {[34mscheduler_job.py:[0m1834} INFO[0m - Resetting orphaned tasks for active dag runs[0m
