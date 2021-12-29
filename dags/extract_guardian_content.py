@@ -3,29 +3,32 @@ import json
 import pathlib
 import requests
 
-from airflow.providers.google.cloud.transfers.local_to_gcs import (
-    LocalFilesystemToGCSOperator,
-)
+from airflow.providers.google.cloud.hooks.gcs import GCSHook
 from airflow.utils.dates import days_ago
 from airflow.models import Variable
 from airflow.decorators import dag, task
 
+# Default Args which are used in DAG
+default_args = {
+    "owner": "airflow",
+    "depends_on_past": False,
+    "email_on_failure": False,
+    "email_on_retry": False,
+    "retries": 3,
+    "retry_delay": timedelta(minutes=5),
+    "provide_context": True,
+    "start_date": days_ago(1),
+    "end_date": datetime.today(),
+}
+
+# Global Variables
 BUCKET_NAME = Variable.get("DATA_GOOGLE_CLOUD_STORAGE")
 GCP_CONN_ID = Variable.get("GCP_GUARDIAN_MINING_CONN_ID")
 GUARDIAN_API_KEY = Variable.get("GUARDIAN_API_KEY")
 ROOT_DIR = pathlib.Path().cwd()
 TMP_DIR = ROOT_DIR / "tmp"
-
-default_args = {
-    "owner": "airflow",
-    "depends_on_past": False,
-    "email": ["emarcphilipp@gmail.com"],
-    "email_on_failure": False,
-    "email_on_retry": False,
-    # 'retries': 3,
-    # 'retry_delay': timedelta(minutes=5),
-    "provide_context": True,
-}
+START_DATE_STRING = str(default_args["start_date"].strftime("%Y-%m-%d"))
+END_DATE_STRING = str(default_args["end_date"].strftime("%Y-%m-%d"))
 
 
 @task
@@ -38,8 +41,8 @@ def get_guardian_content():
 
     while current_page <= total_pages:
         params = {
-            "from-date": dag.start_date.strftime("%Y-%m-%d"),
-            "to-date": dag.end_date.strftime("%Y-%m-%d"),
+            "from-date": START_DATE_STRING,
+            "to-date": END_DATE_STRING,
             "order-by": "oldest",
             "show-fields": "all",
             "show-tags": "all",
@@ -68,45 +71,28 @@ def get_guardian_content():
 
 
 @task
-def store_guardian_content_locally(results):
+def upload_guardian_content_to_gcs_bucket(guardian_content):
     """Store Results from Guardian API as JSON"""
-    for result in results[0:5]:
-        unique_id = result["id"].replace("/", "-")
-        file_path = TMP_DIR / f"{unique_id}.json"
-        with open(file_path, "w") as fp:
-            json.dump(result, fp)
-
-
-@task
-def clean_tmp_dir():
-    """Remove all files in Temp folder"""
-    tmp_filepaths = list(TMP_DIR.rglob("*"))
-    [fp.unlink() for fp in tmp_filepaths]
+    for content in guardian_content:
+        unique_id = content["id"].replace("/", "-")
+        bytes_data = json.dumps(content)
+        gcs_hook = GCSHook(gcp_conn_id=GCP_CONN_ID)
+        object_name = f"01_raw/{START_DATE_STRING}/{unique_id}.json"
+        gcs_hook.upload(
+            bucket_name=BUCKET_NAME, data=bytes_data, object_name=object_name
+        )
 
 
 @dag(
     dag_id="extract_guardian_content",
     description="Extract data from Guardian Content API and store it in GCS Bucket",
     schedule_interval="@daily",
-    start_date=days_ago(1),
-    end_date=datetime.today(),
     catchup=False,
     default_args=default_args,
 )
 def extract():
 
-    guardian_content = get_guardian_content()
-    store_guardian_content_locally(guardian_content)
-
-    LocalFilesystemToGCSOperator(
-        task_id="upload_local_files_to_gcs",
-        src=list(TMP_DIR.rglob("*.json")),
-        dst="01_raw/",
-        bucket=BUCKET_NAME,
-        gcp_conn_id=GCP_CONN_ID,
-    )
-
-    clean_tmp_dir()
+    upload_guardian_content_to_gcs_bucket(get_guardian_content())
 
 
 dag = extract()
