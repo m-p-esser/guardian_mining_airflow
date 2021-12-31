@@ -1,0 +1,6 @@
+black==21.12b0
+flake8>=3.7.9, <4.0
+pylint==2.12.1
+apache-airflow[gcp,mysql]==2.0.1
+cryptography==2.9.2
+pandas-profiling==2.13.0
