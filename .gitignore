@@ -226,3 +226,6 @@ licenses/LICENSES-ui.txt
 
 # Secure folder
 /secure/*
+
+# Custom Bash Scripts
+env.sh
