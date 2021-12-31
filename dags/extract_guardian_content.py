@@ -1,12 +1,12 @@
 from datetime import datetime, timedelta
 import json
-import pathlib
 import requests
 
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
 from airflow.utils.dates import days_ago
 from airflow.models import Variable
 from airflow.decorators import dag, task
+from utils.params import load_parameters
 
 # Default Args which are used in DAG
 default_args = {
@@ -19,14 +19,17 @@ default_args = {
     "provide_context": True,
     "start_date": days_ago(1),
     "end_date": datetime.today(),
+    "params": load_parameters("guardian_mining_params.yml"),
 }
 
 # Global Variables
 BUCKET_NAME = Variable.get("DATA_GOOGLE_CLOUD_STORAGE")
 GCP_CONN_ID = Variable.get("GCP_GUARDIAN_MINING_CONN_ID")
 GUARDIAN_API_KEY = Variable.get("GUARDIAN_API_KEY")
+RAW_DIR = "01_raw"
 START_DATE_STRING = str(default_args["start_date"].strftime("%Y-%m-%d"))
 END_DATE_STRING = str(default_args["end_date"].strftime("%Y-%m-%d"))
+PARAMETERS = default_args["params"]
 
 
 @dag(
@@ -37,22 +40,22 @@ END_DATE_STRING = str(default_args["end_date"].strftime("%Y-%m-%d"))
     default_args=default_args,
 )
 def extract():
-    @task
-    def get_guardian_content():
+    @task(task_id="get_guardian_content")
+    def get_guardian_content(parameters):
         """Call Guardian Search Endpoint and collect Content data"""
         guardian_content = []
         current_page = 1
         total_pages = 1  # there is expected to be a mininum of 1 page for each request
-        base_url = "https://content.guardianapis.com/search"
+        base_url = parameters["base_url"]
 
         while current_page <= total_pages:
             params = {
                 "from-date": START_DATE_STRING,
                 "to-date": END_DATE_STRING,
-                "order-by": "oldest",
-                "show-fields": "all",
-                "show-tags": "all",
-                "page-size": 200,
+                "order-by": parameters["order_by"],
+                "show-fields": parameters["show_fields"],
+                "show-tags": parameters["show_tags"],
+                "page-size": parameters["page_size"],
                 "api-key": GUARDIAN_API_KEY,
                 "page": current_page,
             }
@@ -75,19 +78,21 @@ def extract():
 
         return guardian_content
 
-    @task
+    @task(task_id="upload_guardian_content_to_gcs_bucket")
     def upload_guardian_content_to_gcs_bucket(guardian_content):
         """Store Results from Guardian API as JSON"""
         for content in guardian_content:
             unique_id = content["id"].replace("/", "-")
             bytes_data = json.dumps(content)
             gcs_hook = GCSHook(gcp_conn_id=GCP_CONN_ID)
-            object_name = f"01_raw/{START_DATE_STRING}/{unique_id}.json"
+            object_name = f"{RAW_DIR}/{START_DATE_STRING}/{unique_id}.json"
             gcs_hook.upload(
                 bucket_name=BUCKET_NAME, data=bytes_data, object_name=object_name
             )
 
-    upload_guardian_content_to_gcs_bucket(get_guardian_content())
+    upload_guardian_content_to_gcs_bucket(
+        guardian_content=get_guardian_content(PARAMETERS["guardian_api"])
+    )
 
 
 dag = extract()
