@@ -43,7 +43,7 @@ def extract():
         from_date = (default_args["start_date"] - timedelta(days=1)).strftime(
             "%Y-%m-%d"
         )
-        to_date = default_args["start_date"]
+        to_date = default_args["start_date"].strftime("%Y-%m-%d")
 
         while current_page <= total_pages:
             params = {
