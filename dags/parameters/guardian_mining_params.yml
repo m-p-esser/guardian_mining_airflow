@@ -51,6 +51,27 @@ guardian_content:
       id: web_url_suffix  # primary key
       lang: language
       wordcount: word_count
+    conform: 
+      keep_columns: # which columns should be kept 
+        article:
+          - web_title
+          - web_url_suffix
+          - pillar
+          - section
+          - authors
+          - type
+          - language
+          - web_pubilication_date
+          - newspaper_edition_date
+          - first_publication_date
+          - published_in_newspaper
+          - newspaper_page_number
+          - production_office
+          - publication
+          - word_count
+          - char_count
+          - web_url
+
 
 ######################################################################################################
 
