@@ -105,7 +105,7 @@ def clean_data():
                 df = camel_to_snake_in_df(df)
 
                 # Rename specific Columns
-                rename_columns(df, prefixes_to_remove, rename_columns_mapping)
+                df = rename_columns(df, prefixes_to_remove, rename_columns_mapping)
 
                 cleaned_df = df.copy()
                 return cleaned_df
