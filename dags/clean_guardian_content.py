@@ -17,7 +17,7 @@ from src.clean import (
 from src.utils import load_parameters
 
 # Default Args which are used in DAG
-start_date = datetime(2021, 12, 31)
+start_date = datetime(2021, 12, 31, 6, 0, 0)
 end_date = start_date + timedelta(days=1)
 
 default_args = {
