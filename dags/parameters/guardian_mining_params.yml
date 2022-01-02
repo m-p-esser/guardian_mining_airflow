@@ -1,0 +1,83 @@
+# Guardian API related Parameters
+guardian_api:
+  base_url: 'http://content.guardianapis.com/search'
+  order_by: 'oldest'
+  show_fields: 'all'
+  show_tags: 'all'
+  page_size: 200
+
+######################################################################################################
+
+# Parameters for transforming/cleaning data
+
+guardian_content:
+  json_normalize:  # see pd.json_normalize
+    sep: _
+  clean:
+    drop_columns:  # which columns should be dropped
+      - tags
+      - fields_bodyText
+      - fields_bylineHtml
+      - fields_isInappropriateForSponsorship
+      - fields_shortUrl
+      - fields_thumbnail
+      - fields_legallySensitive
+      - sectionId
+      - pillarId
+      - fields_liveBloggingNow
+      - fields_starRating
+      - fields_sensitive
+      - fields_displayHint
+    duplicate_identifier:
+      id
+    html_columns:  # which columns contain html that needs to be removed, in camelCase
+      - fields_trailText
+      - fields_standfirst
+      - fields_main
+      - fields_body
+    date_columns:  # which columns should be a date, in camelCase
+      - webPublicationDate
+      - fields_firstPublicationDate
+      - fields_lastModified
+      - fields_commentCloseDate
+      - fields_newspaperEditionDate
+    prefixes_to_remove:
+      - fields_
+    rename_columns_mapping:  # key -> old name, value -> new name, keys in snake_case
+      byline: authors
+      section_name: section
+      pillar_name: pillar
+      main: cover_image_caption
+      id: web_url_suffix  # primary key
+      lang: language
+      wordcount: word_count
+
+######################################################################################################
+
+# Parameters for transforming/cleaning data
+
+guardian_content_tags:
+  json_normalize:  # see pd.json_normalize
+    sep: _
+    record_path: tags
+    record_prefix: tags_
+    meta: id
+    meta_prefix: content_
+  clean:
+    drop_columns:  # which columns should be dropped, in camelCase
+      - tags_references
+      - tags_activeSponsorships
+      - tags_bio
+      - tags_bylineImageUrl
+      - tags_bylineLargeImageUrl
+      - tags_sectionId
+      - tags_twitterHandle
+      - tags_emailAddress
+    html_columns:  # which columns contain html that needs to be removed, in camelCase
+      - tags_description
+    prefixes_to_remove:
+      - tags_
+    rename_columns_mapping:  # key -> old name, value -> new name, keys in snake_case
+      id: name
+      contentid: content_id
+      section_name: section
