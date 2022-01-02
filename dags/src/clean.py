@@ -56,9 +56,9 @@ def rename_columns(df, prefixes_to_remove, rename_mapping):
             for prefix in prefixes_to_remove:
                 df.columns = df.columns.str.replace(prefix, "")
 
-    df = df.copy()
-
     # Rename columns according to mapping
     if isinstance(rename_mapping, Dict):
         if len(rename_mapping) > 0:  # Check if Dictionary contains values
             df = df.rename(columns=rename_mapping)
+
+    return df
