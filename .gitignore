@@ -228,4 +228,4 @@ licenses/LICENSES-ui.txt
 /secure/*
 
 # Custom Bash Scripts
-env.sh
+load_env.sh
