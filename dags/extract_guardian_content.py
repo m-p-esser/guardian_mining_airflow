@@ -6,9 +6,12 @@ from airflow.providers.google.cloud.hooks.gcs import GCSHook
 from airflow.utils.dates import days_ago
 from airflow.models import Variable
 from airflow.decorators import dag, task
-from utils.params import load_parameters
+from src.utils import load_parameters
 
 # Default Args which are used in DAG
+start_date = datetime(2021, 12, 31)
+end_date = start_date + timedelta(days=1)
+
 default_args = {
     "owner": "airflow",
     "depends_on_past": False,
@@ -17,19 +20,10 @@ default_args = {
     "retries": 3,
     "retry_delay": timedelta(minutes=5),
     "provide_context": True,
-    "start_date": days_ago(1),
-    "end_date": datetime.today(),
+    "start_date": start_date,
+    "end_date": end_date,
     "params": load_parameters("guardian_mining_params.yml"),
 }
-
-# Global Variables
-BUCKET_NAME = Variable.get("DATA_GOOGLE_CLOUD_STORAGE")
-GCP_CONN_ID = Variable.get("GCP_GUARDIAN_MINING_CONN_ID")
-GUARDIAN_API_KEY = Variable.get("GUARDIAN_API_KEY")
-RAW_DIR = "01_raw"
-START_DATE_STRING = str(default_args["start_date"].strftime("%Y-%m-%d"))
-END_DATE_STRING = str(default_args["end_date"].strftime("%Y-%m-%d"))
-PARAMETERS = default_args["params"]
 
 
 @dag(
@@ -50,13 +44,13 @@ def extract():
 
         while current_page <= total_pages:
             params = {
-                "from-date": START_DATE_STRING,
-                "to-date": END_DATE_STRING,
+                "from-date": str(default_args["start_date"].strftime("%Y-%m-%d")),
+                "to-date": str(default_args["end_date"].strftime("%Y-%m-%d")),
                 "order-by": parameters["order_by"],
                 "show-fields": parameters["show_fields"],
                 "show-tags": parameters["show_tags"],
                 "page-size": parameters["page_size"],
-                "api-key": GUARDIAN_API_KEY,
+                "api-key": Variable.get("GUARDIAN_API_KEY"),
                 "page": current_page,
             }
 
@@ -82,16 +76,23 @@ def extract():
     def upload_guardian_content_to_gcs_bucket(guardian_content):
         """Store Results from Guardian API as JSON"""
         for content in guardian_content:
+
+            # Convert to bytes data
             unique_id = content["id"].replace("/", "-")
             bytes_data = json.dumps(content)
-            gcs_hook = GCSHook(gcp_conn_id=GCP_CONN_ID)
-            object_name = f"{RAW_DIR}/{START_DATE_STRING}/{unique_id}.json"
+
+            # Upload to Google Cloud Storage
+            gcs_hook = GCSHook(gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"))
+            start_date_string = str(default_args["start_date"].strftime("%Y-%m-%d"))
+            object_name = f"01_raw/{start_date_string}/{unique_id}.json"
             gcs_hook.upload(
-                bucket_name=BUCKET_NAME, data=bytes_data, object_name=object_name
+                bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+                data=bytes_data,
+                object_name=object_name,
             )
 
     upload_guardian_content_to_gcs_bucket(
-        guardian_content=get_guardian_content(PARAMETERS["guardian_api"])
+        guardian_content=get_guardian_content(default_args["params"]["guardian_api"])
     )
 
 
