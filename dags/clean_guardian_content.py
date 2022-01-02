@@ -18,7 +18,6 @@ from src.utils import load_parameters
 
 # Default Args which are used in DAG
 start_date = datetime(2021, 12, 31, 6, 0, 0)
-end_date = start_date + timedelta(days=1)
 
 default_args = {
     "owner": "airflow",
@@ -29,7 +28,6 @@ default_args = {
     "retry_delay": timedelta(minutes=5),
     "provide_context": True,
     "start_date": start_date,
-    "end_date": end_date,
     "params": load_parameters("guardian_mining_params.yml"),
 }
 

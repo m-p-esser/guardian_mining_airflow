@@ -10,7 +10,6 @@ from src.utils import load_parameters
 
 # Default Args which are used in DAG
 start_date = datetime(2021, 12, 31, 6, 0, 0)
-end_date = start_date + timedelta(days=1)
 
 default_args = {
     "owner": "airflow",
@@ -21,7 +20,6 @@ default_args = {
     "retry_delay": timedelta(minutes=5),
     "provide_context": True,
     "start_date": start_date,
-    "end_date": end_date,
     "params": load_parameters("guardian_mining_params.yml"),
 }
 
@@ -42,10 +40,15 @@ def extract():
         total_pages = 1  # there is expected to be a mininum of 1 page for each request
         base_url = parameters["base_url"]
 
+        from_date = (default_args["start_date"] - timedelta(days=1)).strftime(
+            "%Y-%m-%d"
+        )
+        to_date = default_args["start_date"]
+
         while current_page <= total_pages:
             params = {
-                "from-date": str(default_args["start_date"].strftime("%Y-%m-%d")),
-                "to-date": str(default_args["end_date"].strftime("%Y-%m-%d")),
+                "from-date": from_date,
+                "to-date": to_date,
                 "order-by": parameters["order_by"],
                 "show-fields": parameters["show_fields"],
                 "show-tags": parameters["show_tags"],
