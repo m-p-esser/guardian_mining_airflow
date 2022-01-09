@@ -2,11 +2,9 @@ from datetime import datetime, timedelta
 import json
 import requests
 
-from airflow.providers.google.cloud.hooks.gcs import GCSHook
-from airflow.utils.dates import days_ago
 from airflow.models import Variable
 from airflow.decorators import dag, task
-from src.utils import load_parameters
+from src.utils import load_parameters, upload_file_to_gcs
 
 # Default Args which are used in DAG
 start_date = datetime(2021, 12, 31, 6, 0, 0)
@@ -82,17 +80,26 @@ def extract():
 
             # Convert to bytes data
             unique_id = content["id"].replace("/", "-")
-            bytes_data = json.dumps(content)
 
-            # Upload to Google Cloud Storage
-            gcs_hook = GCSHook(gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"))
-            start_date_string = str(default_args["start_date"].strftime("%Y-%m-%d"))
-            object_name = f"01_raw/{start_date_string}/{unique_id}.json"
-            gcs_hook.upload(
-                bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
-                data=bytes_data,
-                object_name=object_name,
-            )
+            if content["type"] == "article":
+
+                bytes_data = json.dumps(content)
+
+                # Upload to Google Cloud Storage
+                upload_file_to_gcs(
+                    gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+                    start_date=default_args["start_date"],
+                    folder="01_raw",
+                    file_name=unique_id,
+                    file_type="json",
+                    bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+                    bytes_data=bytes_data,
+                )
+
+            else:
+                print(
+                    f"Content with id '{content['id']}' is no Article. Therefore don't store this content"
+                )
 
     upload_guardian_content_to_gcs_bucket(
         guardian_content=get_guardian_content(default_args["params"]["guardian_api"])
