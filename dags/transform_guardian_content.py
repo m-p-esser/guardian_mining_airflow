@@ -2,13 +2,17 @@ from datetime import datetime, timedelta
 import pandas as pd
 import json
 
-from airflow.providers.google.cloud.hooks.gcs import GCSHook
 from airflow.utils.dates import days_ago
 from airflow.models import Variable
 from airflow.decorators import dag, task
-from airflow.utils.task_group import TaskGroup
 from src.profiling import create_pandas_profile
-from src.utils import load_parameters
+from src.utils import (
+    download_parquet_file_from_gcs,
+    load_parameters,
+    list_file_paths_in_gcs,
+    download_json_files_from_gcs,
+    upload_file_to_gcs,
+)
 
 # Default Args which are used in DAG
 start_date = datetime(2021, 12, 31, 6, 0, 0)
@@ -28,7 +32,7 @@ default_args = {
 
 @dag(
     dag_id="transform_guardian_content",
-    description="Transfrom data from Guardian Content as parquet and write to Google Cloud Storage",
+    description="Transfrom data from Guardian Content to Parquet and write to Google Cloud Storage",
     schedule_interval="@daily",
     start_date=days_ago(1),
     end_date=datetime.today(),
@@ -36,140 +40,134 @@ default_args = {
     default_args=default_args,
 )
 def transform():
+    @task(task_id="load_json_files")
+    def load_json_files():
+        filtered_file_paths = list_file_paths_in_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            start_date=default_args["start_date"],
+            file_type="json",
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+        )
 
-    # Task Group to convert file type
-    with TaskGroup(group_id="convert_file_type") as convert_file_type_tg:
+        list_of_dicts = download_json_files_from_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            file_paths=filtered_file_paths,
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+        )
 
-        def convert_file_type():
-            @task(task_id="list_file_paths_in_gcs_bucket")
-            def list_file_paths_in_gcs_bucket(delimiter):
-                """Return Filepaths of Files in Google Cloud Storage Bucket"""
-                gcs_hook = GCSHook(
-                    gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID")
-                )
-                file_paths = gcs_hook.list(
-                    bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
-                    delimiter=delimiter,
-                )
-                filtered_file_paths = [
-                    fp
-                    for fp in file_paths
-                    if str(default_args["start_date"].strftime("%Y-%m-%d")) in fp
-                ]
-                return filtered_file_paths
+        return list_of_dicts
 
-            @task(task_id="load_json_from_gcs_bucket")
-            def load_json_from_gcs_bucket(file_paths):
-                """Return JSON Files from Google Cloud Storage Bucket"""
-                gcs_hook = GCSHook(
-                    gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID")
-                )
+    list_of_dicts = load_json_files()
 
-                list_of_dicts = []
-                for fp in file_paths:
-                    byte_data = gcs_hook.download(
-                        bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
-                        object_name=fp,
-                    )
-                    dict_data = json.loads(byte_data)
-                    list_of_dicts.append(dict_data)
+    @task(task_id="normalize_guardian_content")
+    def normalize_guardian_content(list_of_dicts, file_name):
+        df = pd.json_normalize(
+            data=list_of_dicts,
+            **default_args["params"][file_name]["json_normalize"],
+        )
+        bytes_data = df.to_parquet()
 
-                return list_of_dicts
+        # Upload to Google Cloud Storage
+        upload_file_to_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            start_date=default_args["start_date"],
+            folder="02_intermediate",
+            file_name="guardian_content",
+            file_type="parquet",
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+            bytes_data=bytes_data,
+        )
 
-            def _json_to_parquet(list_of_dicts, **parameter):
-                """Normalize List of Dictionary to Pandas Dataframe"""
-                df = pd.json_normalize(data=list_of_dicts, **parameter)
-                return df
+    normalized_guardian_content = normalize_guardian_content(
+        list_of_dicts, "guardian_content"
+    )
 
-            @task(task_id="store_parquet_in_gcs_bucket")
-            def store_parquet_in_gcs_bucket(
-                list_of_dicts, output_file_prefix, parameter
-            ):
-                """Save parquet in Google Cloud Storage"""
+    @task(task_id="normalize_guardian_content_tags")
+    def normalize_guardian_content_tags(list_of_dicts, file_name):
+        df = pd.json_normalize(
+            data=list_of_dicts,
+            **default_args["params"][file_name]["json_normalize"],
+        )
+        bytes_data = df.to_parquet()
 
-                # Normalize JSON to Dataframe
-                df = _json_to_parquet(list_of_dicts, **parameter)
-                bytes_data = df.to_parquet()
+        # Upload to Google Cloud Storage
+        upload_file_to_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            start_date=default_args["start_date"],
+            folder="02_intermediate",
+            file_name="guardian_content_tags",
+            file_type="parquet",
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+            bytes_data=bytes_data,
+        )
 
-                # Upload to GCS Bucket
-                gcs_hook = GCSHook(
-                    gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID")
-                )
-                start_date_string = str(default_args["start_date"].strftime("%Y-%m-%d"))
-                object_name = (
-                    f"02_intermediate/{output_file_prefix}_{start_date_string}.parquet"
-                )
-                gcs_hook.upload(
-                    bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
-                    data=bytes_data,
-                    object_name=object_name,
-                )
+    normalized_guardian_content_tags = normalize_guardian_content_tags(
+        list_of_dicts, "guardian_content_tags"
+    )
 
-            file_paths = list_file_paths_in_gcs_bucket(delimiter=".json")
-            list_of_dicts = load_json_from_gcs_bucket(file_paths)
-            store_parquet_in_gcs_bucket(
-                list_of_dicts=list_of_dicts,
-                output_file_prefix="guardian_content",
-                parameter=default_args["params"]["guardian_content"]["json_normalize"],
-            )
-            store_parquet_in_gcs_bucket(
-                list_of_dicts=list_of_dicts,
-                output_file_prefix="guardian_content_tags",
-                parameter=default_args["params"]["guardian_content_tags"][
-                    "json_normalize"
-                ],
-            )
+    @task(task_id="profile_guardian_content")
+    def create_guardian_content_profile(file_name):
+        df = download_parquet_file_from_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            start_date=default_args["start_date"],
+            folder="02_intermediate",
+            file_name=file_name,
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+        )
+        profile = create_pandas_profile(
+            df=df, file_name=file_name, **{"explorative": True}
+        )
 
-        convert_file_type()
+        # Prepare for Upload of Pandas Profile
+        bytes_data = bytes(profile.html, encoding="utf-8")
+        file_name_profile = file_name + "_profile"
 
-    # Task to create and upload Pandas Profile
-    with TaskGroup(group_id="profiling") as profiling_tg:
+        upload_file_to_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            start_date=default_args["start_date"],
+            folder="02_intermediate",
+            file_name=file_name_profile,
+            file_type="html",
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+            bytes_data=bytes_data,
+        )
 
-        def profiling():
-            def _download_parquet_file(output_file_prefix):
-                """Download parquet File from GCS Bucket"""
+    guardian_content_profile = create_guardian_content_profile("guardian_content")
 
-                gcs_hook = GCSHook(
-                    gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID")
-                )
-                data_storage = Variable.get("DATA_GOOGLE_CLOUD_STORAGE")
-                start_date_string = str(default_args["start_date"].strftime("%Y-%m-%d"))
-                object_url = f"gs://{data_storage}/02_intermediate/{output_file_prefix}_{start_date_string}.parquet"
+    @task(task_id="profile_guardian_content_tags")
+    def create_guardian_content_tags_profile(file_name):
+        df = download_parquet_file_from_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            start_date=default_args["start_date"],
+            folder="02_intermediate",
+            file_name=file_name,
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+        )
+        profile = create_pandas_profile(
+            df=df, file_name=file_name, **{"explorative": True}
+        )
 
-                with gcs_hook.provide_file(object_url=object_url) as f:
-                    df = pd.read_parquet(f)
-                    return df
+        # Prepare for Upload of Pandas Profile
+        bytes_data = bytes(profile.html, encoding="utf-8")
+        file_name_profile = file_name + "_profile"
 
-            def _upload_profile(output_file_prefix, profile):
-                """Upload Pandas Profile as HTML to Google Cloud Storage"""
-                bytes_data = bytes(profile.html, encoding="utf-8")
-                gcs_hook = GCSHook(
-                    gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID")
-                )
-                start_date_string = str(default_args["start_date"].strftime("%Y-%m-%d"))
-                file_name = f"profile_{output_file_prefix}_{start_date_string}.html"
-                object_name = f"02_intermediate/{file_name}"
-                gcs_hook.upload(
-                    bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
-                    data=bytes_data,
-                    object_name=object_name,
-                )
+        upload_file_to_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            start_date=default_args["start_date"],
+            folder="02_intermediate",
+            file_name=file_name_profile,
+            file_type="html",
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+            bytes_data=bytes_data,
+        )
 
-            @task(task_id="create_and_upload_pandas_profile")
-            def create_profile(output_file_prefix, **parameter):
-                """First create Pandas Profile from parquet and then upload HTML Profile to Google Cloud Storage"""
-                df = _download_parquet_file(output_file_prefix)
-                profile = create_pandas_profile(
-                    df, output_file_prefix, **{"explorative": True}
-                )
-                _upload_profile(output_file_prefix, profile)
+    guardian_content_tags_profile = create_guardian_content_tags_profile(
+        "guardian_content_tags"
+    )
 
-            create_profile(output_file_prefix="guardian_content")
-            create_profile(output_file_prefix="guardian_content_tags")
-
-        profiling()
-
-    convert_file_type_tg >> profiling_tg
+    list_of_dicts
+    normalized_guardian_content >> guardian_content_profile
+    normalized_guardian_content_tags >> guardian_content_tags_profile
 
 
 dag = transform()
