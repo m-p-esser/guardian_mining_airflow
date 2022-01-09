@@ -62,3 +62,48 @@ def rename_columns(df, prefixes_to_remove, rename_mapping):
             df = df.rename(columns=rename_mapping)
 
     return df
+
+
+def clean_df(
+    df: pd.DataFrame,
+    duplicate_identifier=None,
+    drop_columns=None,
+    html_columns=None,
+    date_columns=None,
+    prefixes_to_remove=None,
+    rename_columns_mapping=None,
+) -> pd.DataFrame:
+    """Run different cleaning functions over Dataframe"""
+
+    # Drop specific Columns
+    if isinstance(drop_columns, list):
+        if len(drop_columns) > 0:
+            df = df.drop(columns=drop_columns)
+
+    # Deduplication
+    if isinstance(duplicate_identifier, str):
+        df = df.drop_duplicates(subset=duplicate_identifier)
+
+    # Replace Missings with Empty String to do String Operations
+    df = df.fillna("")
+
+    # Remove Html tags for specific Columns
+    df = remove_html_tags_in_df(df, html_columns)
+
+    # Replace Empty String with Missing for all Columns
+    df = df.replace("", np.nan)
+
+    # Remove Whitespaces for all Columns
+    df = df.apply(lambda x: x.str.strip(), axis=1)
+
+    # Convert String Columns containg dates to Datetime
+    df = convert_string_to_datetime_in_df(df, date_columns)
+
+    # Convert Camel Cases Column Names to Snake Case for all Columns
+    df = camel_to_snake_in_df(df)
+
+    # Rename specific Columns
+    df = rename_columns(df, prefixes_to_remove, rename_columns_mapping)
+
+    cleaned_df = df.copy()
+    return cleaned_df
