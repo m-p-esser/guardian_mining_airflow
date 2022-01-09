@@ -2,19 +2,16 @@ from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 
-from airflow.providers.google.cloud.hooks.gcs import GCSHook
 from airflow.utils.dates import days_ago
 from airflow.models import Variable
 from airflow.decorators import dag, task
-from airflow.utils.task_group import TaskGroup
 from src.profiling import create_pandas_profile
-from src.clean import (
-    remove_html_tags_in_df,
-    convert_string_to_datetime_in_df,
-    camel_to_snake_in_df,
-    rename_columns,
+from src.clean import clean_df
+from src.utils import (
+    load_parameters,
+    download_parquet_file_from_gcs,
+    upload_file_to_gcs,
 )
-from src.utils import load_parameters
 
 # Default Args which are used in DAG
 start_date = datetime(2021, 12, 31, 6, 0, 0)
@@ -41,174 +38,127 @@ default_args = {
     catchup=False,
     default_args=default_args,
 )
-def clean_data():
+def clean():
+    @task(task_id="clean_guardian_content")
+    def clean_guardian_content(file_name):
 
-    # Task Group to clean Dataframe
-    with TaskGroup(group_id="clean_parquet") as clean_tg:
+        df = download_parquet_file_from_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            start_date=default_args["start_date"],
+            folder="02_intermediate",
+            file_name=file_name,
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+        )
 
-        def clean():
-            def _download_parquet_file(output_file_prefix):
-                """Download parquet File from GCS Bucket"""
+        cleaned_df = clean_df(
+            df=df,
+            **default_args["params"][file_name]["clean"],
+        )
+        bytes_data = cleaned_df.to_parquet()
 
-                gcs_hook = GCSHook(
-                    gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID")
-                )
+        upload_file_to_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            start_date=default_args["start_date"],
+            folder="03_cleaned",
+            file_name=file_name,
+            file_type="parquet",
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+            bytes_data=bytes_data,
+        )
 
-                # Prepare variables for download
-                bucket_name = Variable.get("DATA_GOOGLE_CLOUD_STORAGE")
-                start_date_string = str(default_args["start_date"].strftime("%Y-%m-%d"))
-                object_url = f"gs://{bucket_name}/02_intermediate/{output_file_prefix}_{start_date_string}.parquet"
+    cleaned_guardian_content = clean_guardian_content("guardian_content")
 
-                # Download Files
-                with gcs_hook.provide_file(object_url=object_url) as f:
-                    df = pd.read_parquet(f)
-                    return df
+    @task(task_id="clean_guardian_content_tags")
+    def clean_guardian_content_tags(file_name):
 
-            def clean_parquet(
-                df,
-                duplicate_identifier=None,
-                drop_columns=None,
-                html_columns=None,
-                date_columns=None,
-                prefixes_to_remove=None,
-                rename_columns_mapping=None,
-            ):
-                """Run different cleaning functions over Dataframe"""
+        df = download_parquet_file_from_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            start_date=default_args["start_date"],
+            folder="02_intermediate",
+            file_name=file_name,
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+        )
 
-                # Drop specific Columns
-                if isinstance(drop_columns, list):
-                    if len(drop_columns) > 0:
-                        df = df.drop(columns=drop_columns)
+        cleaned_df = clean_df(
+            df=df,
+            **default_args["params"][file_name]["clean"],
+        )
+        bytes_data = cleaned_df.to_parquet()
 
-                # Deduplication
-                if isinstance(duplicate_identifier, str):
-                    df = df.drop_duplicates(subset=duplicate_identifier)
+        upload_file_to_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            start_date=default_args["start_date"],
+            folder="03_cleaned",
+            file_name=file_name,
+            file_type="parquet",
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+            bytes_data=bytes_data,
+        )
 
-                # Replace Missings with Empty String to do String Operations
-                df = df.fillna("")
+    cleaned_guardian_content_tags = clean_guardian_content_tags("guardian_content_tags")
 
-                # Remove Html tags for specific Columns
-                df = remove_html_tags_in_df(df, html_columns)
+    @task(task_id="profile_guardian_content")
+    def create_guardian_content_profile(file_name):
+        df = download_parquet_file_from_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            start_date=default_args["start_date"],
+            folder="02_intermediate",
+            file_name=file_name,
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+        )
+        profile = create_pandas_profile(
+            df=df, file_name=file_name, **{"explorative": True}
+        )
 
-                # Replace Empty String with Missing for all Columns
-                df = df.replace("", np.nan)
+        # Prepare for Upload of Pandas Profile
+        bytes_data = bytes(profile.html, encoding="utf-8")
+        file_name_profile = file_name + "_profile"
 
-                # Remove Whitespaces for all Columns
-                df = df.apply(lambda x: x.str.strip(), axis=1)
+        upload_file_to_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            start_date=default_args["start_date"],
+            folder="02_intermediate",
+            file_name=file_name_profile,
+            file_type="html",
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+            bytes_data=bytes_data,
+        )
 
-                # Convert String Columns containg dates to Datetime
-                df = convert_string_to_datetime_in_df(df, date_columns)
+    guardian_content_profile = create_guardian_content_profile("guardian_content")
 
-                # Convert Camel Cases Column Names to Snake Case for all Columns
-                df = camel_to_snake_in_df(df)
+    @task(task_id="profile_guardian_content_tags")
+    def create_guardian_content_tags_profile(file_name):
+        df = download_parquet_file_from_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            start_date=default_args["start_date"],
+            folder="02_intermediate",
+            file_name=file_name,
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+        )
+        profile = create_pandas_profile(
+            df=df, file_name=file_name, **{"explorative": True}
+        )
 
-                # Rename specific Columns
-                df = rename_columns(df, prefixes_to_remove, rename_columns_mapping)
+        # Prepare for Upload of Pandas Profile
+        bytes_data = bytes(profile.html, encoding="utf-8")
+        file_name_profile = file_name + "_profile"
 
-                cleaned_df = df.copy()
-                return cleaned_df
+        upload_file_to_gcs(
+            gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
+            start_date=default_args["start_date"],
+            folder="02_intermediate",
+            file_name=file_name_profile,
+            file_type="html",
+            bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
+            bytes_data=bytes_data,
+        )
 
-            @task(task_id="store_parquet_in_gcs_bucket")
-            def store_parquet_in_gcs_bucket(df, output_file_prefix, **parameter):
-                """Save parquet in Google Cloud Storage"""
+    guardian_content_tags_profile = create_guardian_content_tags_profile(
+        "guardian_content_tags"
+    )
 
-                bytes_data = df.to_parquet()
-
-                # Upload to GCS Bucket
-                gcs_hook = GCSHook(
-                    gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID")
-                )
-
-                # Prepare variables for upload
-                start_date_string = str(default_args["start_date"].strftime("%Y-%m-%d"))
-                object_name = (
-                    f"03_cleaned/{output_file_prefix}_{start_date_string}.parquet"
-                )
-                bucket_name = Variable.get("DATA_GOOGLE_CLOUD_STORAGE")
-
-                # Upload Files
-                gcs_hook.upload(
-                    bucket_name=bucket_name, data=bytes_data, object_name=object_name
-                )
-
-            # Clean Guardian Content (Articles etc.)
-            df = _download_parquet_file(output_file_prefix="guardian_content")
-            cleaned_df = clean_parquet(
-                df=df,
-                **default_args["params"]["guardian_content"]["clean"],
-            )
-            store_parquet_in_gcs_bucket(
-                df=cleaned_df, output_file_prefix="guardian_content"
-            )
-
-            # Clean Guardian Content Tags
-            df = _download_parquet_file(output_file_prefix="guardian_content_tags")
-            cleaned_df = clean_parquet(
-                df=df,
-                **default_args["params"]["guardian_content_tags"]["clean"],
-            )
-            store_parquet_in_gcs_bucket(
-                df=cleaned_df, output_file_prefix="guardian_content_tags"
-            )
-
-        clean()
-
-    # Task to create and upload Pandas Profile
-    with TaskGroup(group_id="profiling") as profiling_tg:
-
-        def profiling():
-            def _download_parquet_file(output_file_prefix):
-                """Download parquet File from GCS Bucket"""
-
-                gcs_hook = GCSHook(
-                    gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID")
-                )
-
-                # Prepare variables for download
-                bucket_name = Variable.get("DATA_GOOGLE_CLOUD_STORAGE")
-                start_date_string = str(default_args["start_date"].strftime("%Y-%m-%d"))
-                object_url = f"gs://{bucket_name}/03_cleaned/{output_file_prefix}_{start_date_string}.parquet"
-
-                # Download file
-                with gcs_hook.provide_file(object_url=object_url) as f:
-                    df = pd.read_parquet(f)
-                    return df
-
-            def _upload_profile(output_file_prefix, profile):
-                """Upload Pandas Profile as HTML to Google Cloud Storage"""
-                bytes_data = bytes(profile.html, encoding="utf-8")
-                gcs_hook = GCSHook(
-                    gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID")
-                )
-
-                # Prepare variables for Upload
-                bucket_name = Variable.get("DATA_GOOGLE_CLOUD_STORAGE")
-                start_date_string = str(default_args["start_date"].strftime("%Y-%m-%d"))
-                file_name = f"profile_{output_file_prefix}_{start_date_string}.html"
-                object_name = f"03_cleaned/{file_name}"
-
-                # Upload Profile
-                gcs_hook.upload(
-                    bucket_name=bucket_name,
-                    data=bytes_data,
-                    object_name=object_name,
-                )
-
-            @task(task_id="create_and_upload_pandas_profile")
-            def create_profile(output_file_prefix, **parameter):
-                """First create Pandas Profile from parquet and then upload HTML Profile to Google Cloud Storage"""
-                df = _download_parquet_file(output_file_prefix)
-                profile = create_pandas_profile(
-                    df, output_file_prefix, **{"explorative": True}
-                )
-                _upload_profile(output_file_prefix, profile)
-
-            create_profile(output_file_prefix="guardian_content")
-            create_profile(output_file_prefix="guardian_content_tags")
-
-        profiling()
-
-    clean_tg >> profiling_tg
+    cleaned_guardian_content >> guardian_content_profile
+    cleaned_guardian_content_tags >> guardian_content_tags_profile
 
 
-dag = clean_data()
+dag = clean()
