@@ -8,7 +8,7 @@ guardian_api:
 
 ######################################################################################################
 
-# Parameters for transforming/cleaning data
+# Parameters for transforming/cleaning/conforming data
 
 guardian_content:
   json_normalize:  # see pd.json_normalize
@@ -24,7 +24,6 @@ guardian_content:
       - fields_legallySensitive
       - sectionId
       - pillarId
-      - fields_liveBloggingNow
       - fields_starRating
       - fields_sensitive
       - fields_displayHint
@@ -51,31 +50,47 @@ guardian_content:
       id: web_url_suffix  # primary key
       lang: language
       wordcount: word_count
-    # conform: 
-    #   keep_columns: # which columns should be kept 
-    #     article:
-    #       - web_title
-    #       - web_url_suffix
-    #       - pillar
-    #       - section
-    #       - authors
-    #       - type
-    #       - language
-    #       - web_pubilication_date
-    #       - newspaper_edition_date
-    #       - first_publication_date
-    #       - published_in_newspaper
-    #       - newspaper_page_number
-    #       - production_office
-    #       - publication
-    #       - word_count
-    #       - char_count
-    #       - web_url
-
+  conform:
+    article: 
+      keep_columns: # which columns should be kept, needs be columns which are also in the data model 
+      - web_title
+      - web_url_suffix
+      - pillar
+      - section
+      - authors
+      - type
+      - language
+      - web_publication_date
+      - newspaper_edition_date
+      - first_publication_date
+      - newspaper_page_number
+      - production_office
+      - publication
+      - word_count
+      - char_count
+      - web_url
+    article_text:
+      keep_columns: # which columns should be kept, needs be columns which are also in the data model      
+        - web_title
+        - headline
+        - trail_text
+        - standfirst
+        - cover_image_caption
+        - body 
+    article_setting:
+      keep_columns: # which columns should be kept, needs be columns which are also in the data model
+        - web_title
+        - is_premoderated
+        - commentable
+        - comment_close_date
+        - should_hide_adverts
+        - is_hosted
+        - show_in_related_content
+        - show_affiliate_links
 
 ######################################################################################################
 
-# Parameters for transforming/cleaning data
+# Parameters for transforming/cleaning/conforming data
 
 guardian_content_tags:
   json_normalize:  # see pd.json_normalize
