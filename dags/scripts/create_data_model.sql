@@ -31,6 +31,7 @@ CREATE TABLE `article_text`(
 );
 CREATE TABLE `article_setting`(
     `id` INT UNSIGNED NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    `web_title` VARCHAR(100) NOT NULL,
     `is_premoderated` BOOLEAN NULL,
     `commentable` BOOLEAN NULL COMMENT 'Comments will be checked by a moderator prior to publication if true',
     `comment_close_date` DATETIME NULL,
