@@ -102,7 +102,7 @@ def clean():
         df = download_parquet_file_from_gcs(
             gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
             start_date=default_args["start_date"],
-            folder="02_intermediate",
+            folder="03_cleaned",
             file_name=file_name,
             bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
         )
@@ -117,7 +117,7 @@ def clean():
         upload_file_to_gcs(
             gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
             start_date=default_args["start_date"],
-            folder="02_intermediate",
+            folder="03_cleaned",
             file_name=file_name_profile,
             file_type="html",
             bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
@@ -131,7 +131,7 @@ def clean():
         df = download_parquet_file_from_gcs(
             gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
             start_date=default_args["start_date"],
-            folder="02_intermediate",
+            folder="03_cleaned",
             file_name=file_name,
             bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
         )
@@ -146,7 +146,7 @@ def clean():
         upload_file_to_gcs(
             gcp_conn_id=Variable.get("GCP_GUARDIAN_MINING_CONN_ID"),
             start_date=default_args["start_date"],
-            folder="02_intermediate",
+            folder="03_cleaned",
             file_name=file_name_profile,
             file_type="html",
             bucket_name=Variable.get("DATA_GOOGLE_CLOUD_STORAGE"),
