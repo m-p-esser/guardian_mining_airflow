@@ -35,6 +35,16 @@ def convert_string_to_datetime_in_df(df, date_cols):
     return df
 
 
+def convert_string_to_boolean_in_df(df, bool_cols):
+    """Convert String Columns containg Boolean Strings (false, true) to actual Boolean"""
+    if isinstance(bool_cols, list):
+        if len(bool_cols) > 0:
+            for col in bool_cols:
+                mapping = {"true": True, "false": False}
+                df[col] = df[col].map(mapping)
+    return df
+
+
 def camel_to_snake(name):
     """Turn String written in Camel Case to Snake Case"""
     name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
@@ -70,6 +80,7 @@ def clean_df(
     drop_columns=None,
     html_columns=None,
     date_columns=None,
+    bool_columns=None,
     prefixes_to_remove=None,
     rename_columns_mapping=None,
 ) -> pd.DataFrame:
@@ -96,8 +107,11 @@ def clean_df(
     # Remove Whitespaces for all Columns
     df = df.apply(lambda x: x.str.strip(), axis=1)
 
-    # Convert String Columns containg dates to Datetime
+    # Convert String Columns containing date strings to Datetime
     df = convert_string_to_datetime_in_df(df, date_columns)
+
+    # Convert String Columns containing boolean strings to Boolean
+    df = convert_string_to_boolean_in_df(df, bool_columns)
 
     # Convert Camel Cases Column Names to Snake Case for all Columns
     df = camel_to_snake_in_df(df)
