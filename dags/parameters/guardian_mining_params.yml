@@ -40,6 +40,13 @@ guardian_content:
       - fields_lastModified
       - fields_commentCloseDate
       - fields_newspaperEditionDate
+    bool_columns:
+      - fields_isPremoderated
+      - fields_commentable
+      - fields_shouldHideAdverts
+      - isHosted
+      - fields_showInRelatedContent
+      - fields_showAffiliateLinks
     prefixes_to_remove:
       - fields_
     rename_columns_mapping:  # key -> old name, value -> new name, keys in snake_case
@@ -72,6 +79,7 @@ guardian_content:
     article_text:
       keep_columns: # which columns should be kept, needs be columns which are also in the data model      
         - web_title
+        - web_url_suffix
         - headline
         - trail_text
         - standfirst
@@ -80,6 +88,7 @@ guardian_content:
     article_setting:
       keep_columns: # which columns should be kept, needs be columns which are also in the data model
         - web_title
+        - web_url_suffix
         - is_premoderated
         - commentable
         - comment_close_date
@@ -87,6 +96,7 @@ guardian_content:
         - is_hosted
         - show_in_related_content
         - show_affiliate_links
+
 
 ######################################################################################################
 
@@ -109,11 +119,49 @@ guardian_content_tags:
       - tags_sectionId
       - tags_twitterHandle
       - tags_emailAddress
-    html_columns:  # which columns contain html that needs to be removed, in camelCase
+      - tags_webUrl
+      - tags_apiUrl
       - tags_description
+    html_columns: null # which columns contain html that needs to be removed, in camelCase
     prefixes_to_remove:
       - tags_
     rename_columns_mapping:  # key -> old name, value -> new name, keys in snake_case
-      id: name
-      contentid: content_id
+      id: tag_long
+      web_title: tag
       section_name: section
+  conform:
+    tag_keyword:
+      type: keyword  # what type reflects this tag?
+      drop_columns:  # which columns should be dropped
+        - first_name
+        - last_name
+    tag_contributor:
+      type: contributor
+      drop_columns:
+        - section
+    tag_tracking:
+      type: tracking
+      drop_columns:
+        - first_name
+        - last_name
+    tag_tone:
+      type: tone
+      drop_columns:
+        - first_name
+        - last_name
+        - section
+    tag_series:
+      type: series
+      drop_columns:
+        - first_name
+        - last_name
+    tag_newspaper_book:
+      type: newspaper-book
+      drop_columns:
+        - first_name
+        - last_name
+    tag_newspaper_book_section:
+      type: newspaper-book-section
+      drop_columns:
+        - first_name
+        - last_name
