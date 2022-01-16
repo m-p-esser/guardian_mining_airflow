@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 
-from airflow.providers.google.cloud.hooks.gcs import GCSHook
 from airflow.utils.dates import days_ago
 from airflow.models import Variable
 from airflow.decorators import dag, task
@@ -44,6 +43,13 @@ def conform():
         "article": "guardian_content",
         "article_setting": "guardian_content",
         "article_text": "guardian_content",
+        "tag_tone": "guardian_content_tags",
+        "tag_series": "guardian_content_tags",
+        "tag_tracking": "guardian_content_tags",
+        "tag_contributor": "guardian_content_tags",
+        "tag_keyword": "guardian_content_tags",
+        "tag_newspaper_book": "guardian_content_tags",
+        "tag_newspaper_book_section": "guardian_content_tags",
     }.items():
 
         task_id = f"conform_{file_name_out}"
@@ -61,10 +67,32 @@ def conform():
 
             parameters = default_args["params"][file_name_in]["conform"][file_name_out]
 
-            # Only keep specific columns
-            keep_columns = parameters["keep_columns"]
-            df_filtered = df.loc[:, keep_columns]
-            bytes_data = df_filtered.to_parquet()
+            if "article" in file_name_out:
+
+                # Only keep specific columns
+                keep_columns = parameters["keep_columns"]
+                df_filtered = df.loc[:, keep_columns]
+
+            if "tag" in file_name_out:
+
+                # Only keep specific rows matching a certain value
+                df_filtered = df[df["type"] == parameters["type"]]
+
+                # Rename tag columns
+                type_long = f"{parameters['type'].replace('-', '_')}_long"
+                df_filtered = df_filtered.rename(
+                    columns={
+                        "tag_long": type_long,
+                        "tag": parameters["type"].replace("-", "_"),
+                        "content_id": "web_url_suffix",
+                    }
+                )
+
+                # Drop specific columns
+                drop_columns = parameters["drop_columns"]
+                df_filtered = df_filtered.drop(columns=drop_columns)
+
+            bytes_data = df_filtered.to_parquet(index=False)
 
             # Upload to Google Cloud Storage
             upload_file_to_gcs(
